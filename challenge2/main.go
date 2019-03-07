@@ -44,7 +44,7 @@ func (sr SecureReader) Read(p []byte) (n int, err error) {
 }
 
 func (sw SecureWriter) Write(p []byte) (n int, err error) {
-	// Message size is the legth of the message plus box overhead
+	// Message size is the length of the message plus box overhead
 	msgSize := uint16(len(p) + box.Overhead)
 	if err := binary.Write(sw.w, binary.BigEndian, msgSize); err != nil {
 		panic(err)
