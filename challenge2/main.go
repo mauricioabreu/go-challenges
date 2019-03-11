@@ -91,7 +91,6 @@ func (sw SecureWriter) Write(p []byte) (int, error) {
 		panic(err)
 	}
 
-	// Subtract the overhead if the message is smaller than it
 	if n > box.Overhead {
 		n = n - box.Overhead
 	}
