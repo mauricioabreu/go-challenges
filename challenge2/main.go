@@ -16,6 +16,7 @@ import (
 // SecureReader container to the io.Reader interface
 type SecureReader struct {
 	r   io.Reader
+	buf []byte
 	key *[32]byte
 }
 
@@ -39,11 +40,37 @@ func NewSecureWriter(w io.Writer, priv, pub *[32]byte) io.Writer {
 	return sw
 }
 
-func (sr SecureReader) Read(p []byte) (n int, err error) {
-	return 0, nil
+func (sr SecureReader) Read(p []byte) (int, error) {
+	var msgSize uint16
+	var nonce [24]byte
+
+	err := binary.Read(sr.r, binary.BigEndian, &msgSize)
+	if err != nil {
+		panic(err)
+	}
+
+	err = binary.Read(sr.r, binary.BigEndian, &nonce)
+	if err != nil {
+		panic(err)
+	}
+
+	msg := make([]byte, msgSize)
+	_, err = io.ReadFull(sr.r, msg)
+	if err != nil {
+		panic(err)
+	}
+
+	decryptedMsg, ok := box.OpenAfterPrecomputation(nil, msg, &nonce, sr.key)
+	if !ok {
+		panic(err)
+	}
+	copy(p, decryptedMsg[:])
+	sr.r.Read(p)
+
+	return 12, nil
 }
 
-func (sw SecureWriter) Write(p []byte) (n int, err error) {
+func (sw SecureWriter) Write(p []byte) (int, error) {
 	// Message size is the length of the message plus box overhead
 	msgSize := uint16(len(p) + box.Overhead)
 	if err := binary.Write(sw.w, binary.BigEndian, msgSize); err != nil {
@@ -51,15 +78,15 @@ func (sw SecureWriter) Write(p []byte) (n int, err error) {
 	}
 
 	var nonce [24]byte
-	if _, err = io.ReadFull(rand.Reader, nonce[:]); err != nil {
+	if _, err := io.ReadFull(rand.Reader, nonce[:]); err != nil {
 		panic(err)
 	}
 	if err := binary.Write(sw.w, binary.BigEndian, nonce[:]); err != nil {
 		panic(err)
 	}
 
-	encryptedMsg := box.SealAfterPrecomputation(nonce[:], p, &nonce, sw.key)
-	n, err = sw.w.Write(encryptedMsg)
+	encryptedMsg := box.SealAfterPrecomputation(nil, p, &nonce, sw.key)
+	n, err := sw.w.Write(encryptedMsg)
 	if err != nil {
 		panic(err)
 	}
