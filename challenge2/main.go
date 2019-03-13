@@ -67,7 +67,7 @@ func (sr SecureReader) Read(p []byte) (int, error) {
 	copy(p, decryptedMsg[:])
 	sr.r.Read(p)
 
-	return 12, nil
+	return len(decryptedMsg), nil
 }
 
 func (sw SecureWriter) Write(p []byte) (int, error) {
@@ -98,11 +98,55 @@ func (sw SecureWriter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
+// Conn representation of the ReaderWriterCloser interface
+type Conn struct {
+	io.Reader
+	io.Writer
+	conn net.Conn
+}
+
+// Close the underlying connection
+func (c *Conn) Close() error {
+	return c.conn.Close()
+}
+
+// NewConnection return a connection to the server
+// and an interface to retrieve a public/private key pair
+// Most of this code was based on the examples
+// here: https://godoc.org/golang.org/x/crypto/nacl/box
+func NewConnection(c net.Conn) (*Conn, error) {
+	// Read the public key from the server
+	serverPubKey := &[32]byte{}
+	if _, err := io.ReadFull(c, serverPubKey[:]); err != nil {
+		panic(err)
+	}
+	// Generate a public/private key pair
+	senderPubKey, senderPrivateKey, err := box.GenerateKey(rand.Reader)
+	if err != nil {
+		panic(err)
+	}
+	// We need to write the sender public key in the connection
+	// because it will be used to perform the handshake
+	if _, err := c.Write(senderPubKey[:]); err != nil {
+		panic(err)
+	}
+	conn := &Conn{
+		NewSecureReader(c, senderPrivateKey, senderPubKey),
+		NewSecureWriter(c, senderPrivateKey, senderPubKey),
+		c,
+	}
+	return conn, nil
+}
+
 // Dial generates a private/public key pair,
 // connects to the server, perform the handshake
 // and return a reader/writer.
 func Dial(addr string) (io.ReadWriteCloser, error) {
-	return nil, nil
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		panic(err)
+	}
+	return NewConnection(conn)
 }
 
 // Serve starts a secure echo server on the given listener.
