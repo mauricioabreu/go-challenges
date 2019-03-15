@@ -77,28 +77,25 @@ func (sw SecureWriter) Write(p []byte) (int, error) {
 	// Message size is the length of the message plus box overhead
 	msgSize := uint16(len(p) + box.Overhead)
 	if err := binary.Write(sw.w, binary.BigEndian, msgSize); err != nil {
-		panic(err)
+		return 0, err
 	}
 
 	var nonce [24]byte
 	if _, err := io.ReadFull(rand.Reader, nonce[:]); err != nil {
-		panic(err)
+		return 0, err
 	}
 	if err := binary.Write(sw.w, binary.BigEndian, nonce[:]); err != nil {
-		panic(err)
+		return 0, err
 	}
 
 	encryptedMsg := box.SealAfterPrecomputation(nil, p, &nonce, sw.key)
 	n, err := sw.w.Write(encryptedMsg)
-	if err != nil {
-		panic(err)
-	}
 
 	if n > box.Overhead {
 		n = n - box.Overhead
 	}
 
-	return n, nil
+	return n, err
 }
 
 // Conn representation of the ReaderWriterCloser interface
@@ -178,7 +175,7 @@ func handleRequest(c net.Conn) error {
 	}
 	cliPubKey := &[32]byte{}
 	if _, err := io.ReadFull(c, cliPubKey[:]); err != nil {
-		panic(err)
+		return fmt.Errorf("error on reading public key from client: %s", err)
 	}
 	sr := NewSecureReader(c, recipientPrivateKey, cliPubKey)
 	sw := NewSecureWriter(c, recipientPrivateKey, cliPubKey)
