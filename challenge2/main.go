@@ -194,7 +194,7 @@ func handleRequest(c net.Conn) error {
 		if err != nil {
 			panic(err)
 		}
-		log.Printf("%d bytes writtern\n", wBytes)
+		log.Printf("%d bytes written\n", wBytes)
 	}
 	return nil
 }
