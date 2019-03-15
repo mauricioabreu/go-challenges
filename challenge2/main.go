@@ -171,10 +171,10 @@ func handleRequest(c net.Conn) error {
 	// Generate a public/private key pair
 	recipientPublicKey, recipientPrivateKey, err := box.GenerateKey(rand.Reader)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("error generating key: %s", err)
 	}
 	if _, err := c.Write(recipientPublicKey[:]); err != nil {
-		panic(err)
+		return fmt.Errorf("error writing the public key: %s", err)
 	}
 	cliPubKey := &[32]byte{}
 	if _, err := io.ReadFull(c, cliPubKey[:]); err != nil {
