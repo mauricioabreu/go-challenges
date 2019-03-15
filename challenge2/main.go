@@ -118,17 +118,17 @@ func NewConnection(c net.Conn) (*Conn, error) {
 	// Read the public key from the server
 	serverPubKey := &[32]byte{}
 	if _, err := io.ReadFull(c, serverPubKey[:]); err != nil {
-		return &Conn{}, errors.New("error reading public key")
+		return &Conn{}, fmt.Errorf("error reading public key from server: %s", err)
 	}
 	// Generate a public/private key pair
 	senderPubKey, senderPrivateKey, err := box.GenerateKey(rand.Reader)
 	if err != nil {
-		panic(err)
+		return &Conn{}, fmt.Errorf("error on generating key: %s", err)
 	}
 	// We need to write the sender public key in the connection
 	// because it will be used to perform the handshake
 	if _, err := c.Write(senderPubKey[:]); err != nil {
-		panic(err)
+		return &Conn{}, fmt.Errorf("error on writing public key: %s", err)
 	}
 	conn := &Conn{
 		NewSecureReader(c, senderPrivateKey, serverPubKey),
