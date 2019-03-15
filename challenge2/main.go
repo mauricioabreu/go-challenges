@@ -31,14 +31,14 @@ type SecureWriter struct {
 // NewSecureReader instantiates a new SecureReader
 func NewSecureReader(r io.Reader, priv, pub *[32]byte) io.Reader {
 	sr := &SecureReader{r: r, key: &[32]byte{}}
-	box.Precompute(sr.key, priv, pub)
+	box.Precompute(sr.key, pub, priv)
 	return sr
 }
 
 // NewSecureWriter instantiates a new SecureWriter
 func NewSecureWriter(w io.Writer, priv, pub *[32]byte) io.Writer {
 	sw := &SecureWriter{w: w, key: &[32]byte{}}
-	box.Precompute(sw.key, priv, pub)
+	box.Precompute(sw.key, pub, priv)
 	return sw
 }
 
