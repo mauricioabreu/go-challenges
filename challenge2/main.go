@@ -3,10 +3,12 @@ package main
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"os"
 
@@ -42,14 +44,14 @@ func NewSecureWriter(w io.Writer, priv, pub *[32]byte) io.Writer {
 
 func (sr SecureReader) Read(p []byte) (int, error) {
 	var msgSize uint16
-	var nonce [24]byte
+	nonce := &[24]byte{}
 
 	err := binary.Read(sr.r, binary.BigEndian, &msgSize)
 	if err != nil {
 		panic(err)
 	}
 
-	err = binary.Read(sr.r, binary.BigEndian, &nonce)
+	err = binary.Read(sr.r, binary.BigEndian, nonce)
 	if err != nil {
 		panic(err)
 	}
@@ -60,9 +62,10 @@ func (sr SecureReader) Read(p []byte) (int, error) {
 		panic(err)
 	}
 
-	decryptedMsg, ok := box.OpenAfterPrecomputation(nil, msg, &nonce, sr.key)
+	decryptedMsg, ok := box.OpenAfterPrecomputation(nil, msg, nonce, sr.key)
 	if !ok {
-		panic(err)
+		err = errors.New("could not decrypt box")
+		return 0, err
 	}
 	copy(p, decryptedMsg[:])
 	sr.r.Read(p)
@@ -118,7 +121,7 @@ func NewConnection(c net.Conn) (*Conn, error) {
 	// Read the public key from the server
 	serverPubKey := &[32]byte{}
 	if _, err := io.ReadFull(c, serverPubKey[:]); err != nil {
-		panic(err)
+		return &Conn{}, errors.New("error reading public key")
 	}
 	// Generate a public/private key pair
 	senderPubKey, senderPrivateKey, err := box.GenerateKey(rand.Reader)
@@ -131,8 +134,8 @@ func NewConnection(c net.Conn) (*Conn, error) {
 		panic(err)
 	}
 	conn := &Conn{
-		NewSecureReader(c, senderPrivateKey, senderPubKey),
-		NewSecureWriter(c, senderPrivateKey, senderPubKey),
+		NewSecureReader(c, senderPrivateKey, serverPubKey),
+		NewSecureWriter(c, senderPrivateKey, serverPubKey),
 		c,
 	}
 	return conn, nil
@@ -144,13 +147,58 @@ func NewConnection(c net.Conn) (*Conn, error) {
 func Dial(addr string) (io.ReadWriteCloser, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to dial %s", addr)
 	}
 	return NewConnection(conn)
 }
 
 // Serve starts a secure echo server on the given listener.
 func Serve(l net.Listener) error {
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			return err
+		}
+		go func() {
+			if err = handleRequest(conn); err != nil {
+				log.Printf("error handling request from %s: %s\n", l.Addr().String(), err)
+			}
+		}()
+	}
+}
+
+func handleRequest(c net.Conn) error {
+	// Generate a public/private key pair
+	recipientPublicKey, recipientPrivateKey, err := box.GenerateKey(rand.Reader)
+	if err != nil {
+		panic(err)
+	}
+	if _, err := c.Write(recipientPublicKey[:]); err != nil {
+		panic(err)
+	}
+	cliPubKey := &[32]byte{}
+	if _, err := io.ReadFull(c, cliPubKey[:]); err != nil {
+		panic(err)
+	}
+	sr := NewSecureReader(c, recipientPrivateKey, cliPubKey)
+	sw := NewSecureWriter(c, recipientPrivateKey, cliPubKey)
+	buf := make([]byte, int64(math.Pow(2, 16)-1))
+
+	for {
+		rBytes, err := sr.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("failed to read: %s", err)
+		}
+		log.Printf("%d bytes read\n", rBytes)
+		wBytes, err := sw.Write(buf[:rBytes])
+		if err != nil {
+			panic(err)
+		}
+		log.Printf("%d bytes writtern\n", wBytes)
+	}
 	return nil
 }
 
