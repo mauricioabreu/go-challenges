@@ -48,18 +48,18 @@ func (sr SecureReader) Read(p []byte) (int, error) {
 
 	err := binary.Read(sr.r, binary.BigEndian, &msgSize)
 	if err != nil {
-		panic(err)
+		return 0, fmt.Errorf("error reading message size: %s", err)
 	}
 
 	err = binary.Read(sr.r, binary.BigEndian, nonce)
 	if err != nil {
-		panic(err)
+		return 0, fmt.Errorf("error reading nonce: %s", err)
 	}
 
 	msg := make([]byte, msgSize)
 	_, err = io.ReadFull(sr.r, msg)
 	if err != nil {
-		panic(err)
+		return 0, fmt.Errorf("erro reading encrypted message: %s", err)
 	}
 
 	decryptedMsg, ok := box.OpenAfterPrecomputation(nil, msg, nonce, sr.key)
@@ -187,12 +187,12 @@ func handleRequest(c net.Conn) error {
 			if err == io.EOF {
 				break
 			}
-			return fmt.Errorf("failed to read: %s", err)
+			return fmt.Errorf("error reading message from client: %s", err)
 		}
 		log.Printf("%d bytes read\n", rBytes)
 		wBytes, err := sw.Write(buf[:rBytes])
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("error writing back to client: %s", err)
 		}
 		log.Printf("%d bytes written\n", wBytes)
 	}
