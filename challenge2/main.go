@@ -42,7 +42,7 @@ func NewSecureWriter(w io.Writer, priv, pub *[32]byte) io.Writer {
 	return sw
 }
 
-func (sr SecureReader) Read(p []byte) (int, error) {
+func (sr *SecureReader) Read(p []byte) (int, error) {
 	var msgSize uint16
 	nonce := &[24]byte{}
 
@@ -73,7 +73,7 @@ func (sr SecureReader) Read(p []byte) (int, error) {
 	return len(decryptedMsg), nil
 }
 
-func (sw SecureWriter) Write(p []byte) (int, error) {
+func (sw *SecureWriter) Write(p []byte) (int, error) {
 	// Message size is the length of the message plus box overhead
 	msgSize := uint16(len(p) + box.Overhead)
 	if err := binary.Write(sw.w, binary.BigEndian, msgSize); err != nil {
@@ -90,7 +90,6 @@ func (sw SecureWriter) Write(p []byte) (int, error) {
 
 	encryptedMsg := box.SealAfterPrecomputation(nil, p, &nonce, sw.key)
 	n, err := sw.w.Write(encryptedMsg)
-
 	if n > box.Overhead {
 		n = n - box.Overhead
 	}
@@ -157,7 +156,7 @@ func Serve(l net.Listener) error {
 			return err
 		}
 		go func() {
-			if err = handleRequest(conn); err != nil {
+			if err := handleRequest(conn); err != nil {
 				log.Printf("error handling request from %s: %s\n", l.Addr().String(), err)
 			}
 		}()
