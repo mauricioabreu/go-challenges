@@ -8,4 +8,6 @@ Solving go challenges from [Go Challenges website](http://golang-challenge.org/)
 
 [Challenge 1](challenge1): how to decode a binary file and print the content of a sheet music.
 
+### Sending encrypted messages
+
 [Challenge 2](challenge2): how to send and receive secure messages 
